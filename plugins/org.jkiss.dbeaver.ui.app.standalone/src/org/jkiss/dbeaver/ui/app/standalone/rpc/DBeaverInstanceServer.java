@@ -17,7 +17,6 @@
 
 package org.jkiss.dbeaver.ui.app.standalone.rpc;
 
-import com.sun.nio.file.ExtendedOpenOption;
 import org.apache.commons.cli.CommandLine;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
@@ -42,7 +41,8 @@ import org.jkiss.dbeaver.utils.GeneralUtils;
 import org.jkiss.utils.CommonUtils;
 import org.jkiss.utils.IOUtils;
 
-import java.io.*;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.nio.ByteBuffer;
@@ -207,16 +207,16 @@ public class DBeaverInstanceServer implements IInstanceController {
 
             }
 
-            try {
-                configFileChannel = FileChannel.open(
-                    GeneralUtils.getMetadataFolder().toPath().resolve(RMI_PROP_FILE),
-                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE,
-                    ExtendedOpenOption.NOSHARE_WRITE, ExtendedOpenOption.NOSHARE_DELETE
-                );
-            } catch (IOException ignored) {
+            final IInstanceController client = InstanceClient.createClient(GeneralUtils.getMetadataFolder().getParent(), true);
+            if (client != null) {
                 log.debug("Can't start RMI server because other instance is already running");
                 return null;
             }
+
+            configFileChannel = FileChannel.open(
+                GeneralUtils.getMetadataFolder().toPath().resolve(RMI_PROP_FILE),
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE
+            );
 
             try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
                 Properties props = new Properties();
@@ -258,6 +258,7 @@ public class DBeaverInstanceServer implements IInstanceController {
                 Files.delete(GeneralUtils.getMetadataFolder().toPath().resolve(RMI_PROP_FILE));
             }
 
+            log.debug("RMI controller has been stopped");
         } catch (Exception e) {
             log.error("Can't stop RMI server", e);
         }
