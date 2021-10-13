@@ -290,12 +290,9 @@ public class PostgreDatabaseBackupSettings extends PostgreBackupRestoreSettings 
                         log.error(e);
                         return "BAD_TIMESTAMP";
                     }
-                case NativeToolUtils.VARIABLE_DATE:
-                    return RuntimeUtils.getCurrentDate();
                 default:
-                    System.getProperty(name);
+                    return NativeToolUtils.replaceVariables(name);
             }
-            return null;
         });
         return new File(getOutputFolder(), outputFileName);
     }

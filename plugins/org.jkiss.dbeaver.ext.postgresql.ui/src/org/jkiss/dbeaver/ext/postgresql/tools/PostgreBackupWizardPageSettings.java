@@ -35,6 +35,7 @@ import org.jkiss.dbeaver.utils.GeneralUtils;
 import org.jkiss.utils.CommonUtils;
 
 import java.io.File;
+import java.util.Arrays;
 import java.util.Objects;
 
 
@@ -140,29 +141,21 @@ class PostgreBackupWizardPageSettings extends PostgreToolWizardPageSettings<Post
             PostgreMessages.wizard_backup_page_setting_label_output_folder,
             wizard.getSettings().getOutputFolder() != null ? wizard.getSettings().getOutputFolder().getAbsolutePath() : null,
             e -> updateState());
-        outputFileText = UIUtils.createLabelText(
-            outputGroup,
-            PostgreMessages.wizard_backup_page_setting_label_file_name_pattern,
-            wizard.getSettings().getOutputFilePattern());
-        UIUtils.setContentProposalToolTip(outputFileText, PostgreMessages.wizard_backup_page_setting_label_file_name_pattern_output,
-            NativeToolUtils.VARIABLE_HOST,
-            NativeToolUtils.VARIABLE_DATABASE,
-            NativeToolUtils.VARIABLE_TABLE,
-            NativeToolUtils.VARIABLE_DATE,
-            NativeToolUtils.VARIABLE_TIMESTAMP,
-            NativeToolUtils.VARIABLE_CONN_TYPE);
+        UIUtils.createControlLabel(outputGroup, PostgreMessages.wizard_backup_page_setting_label_file_name_pattern);
+        final Composite outputFileGroup = UIUtils.createComposite(outputGroup, 3);
+        final GridData gd = new GridData(SWT.FILL, SWT.FILL, true, true);
+        outputFileGroup.setLayoutData(gd);
+        outputFileText = new Text(outputFileGroup, SWT.BORDER);
+        outputFileText.setText(wizard.getSettings().getOutputFilePattern());
+        outputFileText.setLayoutData(gd);
+        UIUtils.setContentProposalToolTip(outputFileText, PostgreMessages.wizard_backup_page_setting_label_file_name_pattern_output, NativeToolUtils.ALL_VARIABLES);
         ContentAssistUtils.installContentProposal(
             outputFileText,
             new SmartTextContentAdapter(),
-            new StringContentProposalProvider(
-                GeneralUtils.variablePattern(NativeToolUtils.VARIABLE_HOST),
-                GeneralUtils.variablePattern(NativeToolUtils.VARIABLE_DATABASE),
-                GeneralUtils.variablePattern(NativeToolUtils.VARIABLE_TABLE),
-                GeneralUtils.variablePattern(NativeToolUtils.VARIABLE_DATE),
-                GeneralUtils.variablePattern(NativeToolUtils.VARIABLE_TIMESTAMP),
-                GeneralUtils.variablePattern(NativeToolUtils.VARIABLE_CONN_TYPE)));
-        outputTimestampPatternText = UIUtils.createLabelText(outputGroup, PostgreMessages.wizard_backup_page_setting_label_timestamp_pattern, wizard.getSettings().getOutputTimestampPattern(), SWT.BORDER);
+            new StringContentProposalProvider(Arrays.stream(NativeToolUtils.ALL_VARIABLES).map(GeneralUtils::variablePattern).toArray(String[]::new)));
+        outputTimestampPatternText = UIUtils.createLabelText(outputFileGroup, PostgreMessages.wizard_backup_page_setting_label_timestamp_pattern, wizard.getSettings().getOutputTimestampPattern(), SWT.BORDER);
         outputTimestampPatternText.addModifyListener(e -> updateState());
+        outputTimestampPatternText.setLayoutData(gd);
         fixOutputFileExtension();
 
         createExtraArgsInput(outputGroup);
