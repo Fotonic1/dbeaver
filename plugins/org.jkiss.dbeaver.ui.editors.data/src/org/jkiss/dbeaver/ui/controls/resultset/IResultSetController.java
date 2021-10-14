@@ -157,6 +157,8 @@ public interface IResultSetController extends IDataController, DBPContextProvide
     @NotNull
     ResultSetRow addNewRow(final boolean copyCurrent, boolean afterCurrent, boolean updatePresentation);
 
+    void fillRow(boolean down, boolean updatePresentation);
+
     ////////////////////////////////////////
     // Navigation & history
 

@@ -1013,4 +1013,30 @@ public class CommonUtils {
         matcher.appendTail(sb);
         return sb.toString();
     }
+
+    /**
+     * Performs grouping of a consecutive indexes.
+     *
+     * <h3>Example</h3>
+     *
+     * <pre>
+     * {1} &rArr; {[1..1]}
+     * {1, 2, 3, 4, 5, 6, 7} &rArr; {[1..7]}
+     * {1, 2, 4, 6, 7, 8, 9} &rArr; {[1..2], [4..4], [6..9]}
+     * </pre>
+     *
+     * @param indexes the indexes to group
+     * @return grouped indexes
+     */
+    @NotNull
+    public static int[][] groupConsecutiveIndexes(@NotNull int[] indexes) {
+        final List<int[]> ranges = new ArrayList<>();
+        for (int index = 1, start = 0, length = indexes.length; index <= length; index++) {
+            if (index == length || indexes[index - 1] != indexes[index] - 1) {
+                ranges.add(new int[]{indexes[start], indexes[index - 1]});
+                start = index;
+            }
+        }
+        return ranges.toArray(new int[0][]);
+    }
 }

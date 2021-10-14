@@ -2602,6 +2602,9 @@ public class ResultSetViewer extends Viewer
                     editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_ADD));
                     editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_COPY));
                     editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_DELETE));
+                    editMenu.add(new Separator());
+                    editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_COPY_FROM_ABOVE));
+                    editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_COPY_FROM_BELOW));
                 }
 
                 manager.add(new Separator());
@@ -4094,7 +4097,7 @@ public class ResultSetViewer extends Viewer
                 // No rows selected, use zero as the only row number
                 partitionedSelectedRows = new int[][]{new int[]{0, 0}};
             } else {
-                partitionedSelectedRows = groupConsecutiveRows(
+                partitionedSelectedRows = CommonUtils.groupConsecutiveIndexes(
                     selectedRows.stream()
                         .mapToInt(ResultSetRow::getVisualNumber)
                         .toArray()
@@ -4208,30 +4211,81 @@ public class ResultSetViewer extends Viewer
         return curRow;
     }
 
-    /**
-     * Performs grouping of a continuous indexes.
-     *
-     * <h3>Example</h3>
-     *
-     * <pre>
-     * {1} &rArr; {[1..1)}
-     * {1, 2, 3, 4, 5, 6, 7} &rArr; {[1..7)}
-     * {1, 2, 4, 6, 7, 8, 9} &rArr; {[1..2), [4..4), [6..9)}
-     * </pre>
-     *
-     * @param indexes the indexes to group
-     * @return grouped indexes
-     */
-    @NotNull
-    private static int[][] groupConsecutiveRows(@NotNull int[] indexes) {
-        final List<int[]> ranges = new ArrayList<>();
-        for (int index = 1, start = 0, length = indexes.length; index <= length; index++) {
-            if (index == length || indexes[index - 1] != indexes[index] - 1) {
-                ranges.add(new int[]{indexes[start], indexes[index - 1]});
-                start = index;
+    @Override
+    public void fillRow(boolean above, boolean updatePresentation) {
+        final DBCExecutionContext context = getExecutionContext();
+        if (context == null) {
+            throw new IllegalStateException("Can't fill rows in disconnected results");
+        }
+
+        final DBDAttributeBinding docAttribute = model.getDocumentAttribute();
+        final DBDAttributeBinding[] attributes = model.getAttributes();
+
+        final List<ResultSetRow> selectedRows = getSelection().getSelectedRows();
+        final int[][] partitionedSelectedRows = CommonUtils.groupConsecutiveIndexes(
+            selectedRows.stream()
+                .mapToInt(ResultSetRow::getVisualNumber)
+                .toArray()
+        );
+
+        try (DBCSession session = context.openSession(new VoidProgressMonitor(), DBCExecutionPurpose.UTIL, ResultSetMessages.controls_resultset_viewer_add_new_row_context_name)) {
+            for (int[] partitionRange : partitionedSelectedRows) {
+                final int partitionStart = partitionRange[0];
+                final int partitionEnd = partitionRange[1];
+                final int sourceRowIndex;
+
+                if (partitionStart == partitionEnd) {
+                    // Single row in partition, copy values from row above/below this partition
+                    sourceRowIndex = partitionStart + (above ? -1 : 1);
+                } else {
+                    // Multiple rows in partition, copy values from first/last row of this partition
+                    sourceRowIndex = above ? partitionStart : partitionEnd;
+                }
+
+                if (sourceRowIndex < 0 || sourceRowIndex >= model.getRowCount()) {
+                    break;
+                }
+
+                final Object[] sourceRow = model.getRow(sourceRowIndex).getValues();
+
+                for (int partitionIndex = partitionStart; partitionIndex <= partitionEnd; partitionIndex++) {
+                    if (partitionIndex == sourceRowIndex) {
+                        // We don't to override source row
+                        continue;
+                    }
+
+                    final ResultSetRow targetRow = model.getRow(partitionIndex);
+
+                    if (docAttribute != null) {
+                        try {
+                            final Object sourceValue = docAttribute.getValueHandler().getValueFromObject(session, docAttribute, sourceRow[0], true, false);
+                            final ResultSetValueController controller = new ResultSetValueController(this, docAttribute, targetRow, IValueController.EditType.NONE, null);
+                            controller.updateValue(sourceValue, false);
+                        } catch (DBCException e) {
+                            log.error("Can't extract document value", e);
+                        }
+                    } else {
+                        for (int attrIndex = 0; attrIndex < attributes.length; attrIndex++) {
+                            final DBDAttributeBinding metaAttr = attributes[attrIndex];
+                            if (!metaAttr.isPseudoAttribute() && !metaAttr.isAutoGenerated()) {
+                                final DBSAttributeBase attribute = metaAttr.getAttribute();
+                                try {
+                                    final Object sourceValue = metaAttr.getValueHandler().getValueFromObject(session, attribute, sourceRow[attrIndex], true, false);
+                                    final ResultSetValueController controller = new ResultSetValueController(this, metaAttr, targetRow, IValueController.EditType.NONE, null);
+                                    controller.updateValue(sourceValue, false);
+                                } catch (DBCException e) {
+                                    log.error("Can't extract cell value", e);
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
-        return ranges.toArray(new int[0][]);
+        if (updatePresentation) {
+            redrawData(false, true);
+            updateEditControls();
+        }
     }
 
     public void deleteSelectedRows()
